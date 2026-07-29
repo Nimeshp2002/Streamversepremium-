@@ -1,24 +1,33 @@
 import os
+import json
 import datetime
 import telebot
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# Firebase Setup (Make sure serviceAccountKey.json is uploaded in GitHub)
-cred = credentials.Certificate("serviceAccountKey.json")
+# Get Firebase JSON Key from Environment Variable
+firebase_key_str = os.environ.get("FIREBASE_KEY")
+
+if firebase_key_str:
+    cred_dict = json.loads(firebase_key_str)
+    cred = credentials.Certificate(cred_dict)
+else:
+    # Local fallback
+    cred = credentials.Certificate("serviceAccountKey.json")
+
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-# Telegram Bot Token
-BOT_TOKEN = "8513466237:AAHROJjIfiRwLyKgwRHLm0XXn-1CEvGsn5Y"
+# Get Bot Token
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8513466237:AAHROJjIfiRwLyKgwRHLm0XXn-1CEvGsn5Y")
 bot = telebot.TeleBot(BOT_TOKEN)
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     welcome_msg = (
-        "👋 **Streamverse Bot me aapka swagat hai!**\n\n"
-        "Website par movie add karne ke liye is format me message bhejein:\n\n"
-        "`/add Movie Title | Poster Image URL | Download Link`"
+        "👋 **Streamverse Bot Active Hai!**\n\n"
+        "Website par movie post karne ke liye is format me message bhejein:\n\n"
+        "`/add Title | Poster_URL | Download_URL`"
     )
     bot.reply_to(message, welcome_msg, parse_mode="Markdown")
 
@@ -31,7 +40,7 @@ def add_movie(message):
         if len(parts) < 3:
             bot.reply_to(
                 message, 
-                "⚠️ **Format Sahi Nahi Hai!**\n\nSahi format ye hai:\n`/add Pushpa 2 | https://link-to-poster.jpg | https://link-to-download.com`", 
+                "⚠️ **Format Sahi Nahi Hai!**\n\nCorrect Format:\n`/add Pushpa 2 | https://link-to-poster.jpg | https://link-to-download.com`", 
                 parse_mode="Markdown"
             )
             return
@@ -57,7 +66,7 @@ def add_movie(message):
         )
 
     except Exception as e:
-        bot.reply_to(message, f"❌ Error aayi: {str(e)}")
+        bot.reply_to(message, f"❌ Error: {str(e)}")
 
-print("Bot successfully start ho gaya hai...")
+print("Bot starting successfully...")
 bot.infinity_polling()
