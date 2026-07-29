@@ -23,53 +23,56 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "👋 **Streamverse Bot Active Hai!**\n\nAap kisi bhi channel se post forward karein ya `/add Title | Poster | Link` format me bhejein, website par auto-post ho jayega!", parse_mode="Markdown")
+    bot.reply_to(message, "👋 **Streamverse Bot Active Hai!**\n\nAap direct message reply karein, forward karein, ya `/add` likhein — website par post ho jayega!", parse_mode="Markdown")
 
 @bot.message_handler(content_types=['text', 'photo'])
-def handle_incoming_post(message):
+def handle_all_posts(message):
     try:
-        # Message caption ya text extract karna
+        # Check text content
         text = message.caption if message.photo else message.text
-        if not text:
-            return
+        
+        # Handling reply to message
+        if message.reply_to_message:
+            replied = message.reply_to_message
+            text = (replied.caption if replied.photo else replied.text) or text
 
-        # Agar /start command hai toh ignore karein
-        if text.startswith('/start'):
+        if not text or text.startswith('/start'):
             return
 
         title = ""
         download_url = ""
         poster_url = ""
 
-        # 1. Image Handler (Agar Photo Bheji Hai)
+        # 1. Image Check
         if message.photo:
             file_id = message.photo[-1].file_id
             file_info = bot.get_file(file_id)
             poster_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_info.file_path}"
+        elif message.reply_to_message and message.reply_to_message.photo:
+            file_id = message.reply_to_message.photo[-1].file_id
+            file_info = bot.get_file(file_id)
+            poster_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_info.file_path}"
 
-        # 2. Extract Links from Text
+        # 2. Extract Links
         urls = re.findall(r'https?://[^\s]+', text)
-        for url in urls:
-            if 'http' in url:
-                download_url = url
-                break
+        if urls:
+            download_url = urls[0]
 
-        # 3. Extract Title (Pehli line ko Title maan lete hain)
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        if lines:
-            title = lines[0].replace('/add', '').replace('❤️', '').strip()
-
-        # Agar Direct /add Pipe Format diya ho: /add Title | Poster | Link
+        # 3. Pipe format check: /add Title | Poster | Link
         if '|' in text:
             parts = text.replace('/add', '').split('|')
             if len(parts) >= 3:
                 title = parts[0].strip()
                 poster_url = parts[1].strip()
                 download_url = parts[2].strip()
+        else:
+            # Extract Title from First non-empty line
+            lines = [line.strip() for line in text.split('\n') if line.strip() and not line.startswith('/')]
+            if lines:
+                title = lines[0].replace('❤️', '').replace('💚', '').strip()
 
-        # Validation
         if not title:
-            bot.reply_to(message, "⚠️ Title nahi mila!")
+            bot.reply_to(message, "⚠️ Title nahi mil saka!")
             return
 
         if not download_url:
@@ -77,10 +80,10 @@ def handle_incoming_post(message):
             return
 
         if not poster_url:
-            # Placeholder poster agar photo na ho
-            poster_url = "https://via.placeholder.com/300x400?text=" + title.replace(' ', '+')
+            # Default placeholder image agar photo na mile
+            poster_url = f"https://via.placeholder.com/400x600/111111/FFFFFF?text={title.replace(' ', '+')}"
 
-        # Save to Firebase
+        # Save to Firebase Firestore
         movie_data = {
             "title": title,
             "poster": poster_url,
@@ -92,12 +95,12 @@ def handle_incoming_post(message):
 
         bot.reply_to(
             message, 
-            f"✅ **Website Par Post Ho Gayi!**\n\n🎬 **Title:** {title}\n🖼️ **Poster:** Added\n🔗 **Link:** {download_url}", 
+            f"✅ **Website Par Post Ho Gayi!**\n\n🎬 **Title:** {title}\n🔗 **Link:** {download_url}", 
             parse_mode="Markdown"
         )
 
     except Exception as e:
         bot.reply_to(message, f"❌ Error: {str(e)}")
 
-print("Bot runs successfully...")
+print("Bot is up and running...")
 bot.infinity_polling()
