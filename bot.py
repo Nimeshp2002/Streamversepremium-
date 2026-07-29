@@ -2,9 +2,22 @@ import os
 import re
 import json
 import datetime
+import threading
+from flask import Flask
 import telebot
 import firebase_admin
 from firebase_admin import credentials, firestore
+
+# Dummy Web Server for Render Port Check
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running perfectly!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
 
 # Firebase Setup
 firebase_key_str = os.environ.get("FIREBASE_KEY")
@@ -28,10 +41,8 @@ def send_welcome(message):
 @bot.message_handler(content_types=['text', 'photo'])
 def handle_all_posts(message):
     try:
-        # Check text content
         text = message.caption if message.photo else message.text
         
-        # Handling reply to message
         if message.reply_to_message:
             replied = message.reply_to_message
             text = (replied.caption if replied.photo else replied.text) or text
@@ -43,7 +54,6 @@ def handle_all_posts(message):
         download_url = ""
         poster_url = ""
 
-        # 1. Image Check
         if message.photo:
             file_id = message.photo[-1].file_id
             file_info = bot.get_file(file_id)
@@ -53,12 +63,10 @@ def handle_all_posts(message):
             file_info = bot.get_file(file_id)
             poster_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_info.file_path}"
 
-        # 2. Extract Links
         urls = re.findall(r'https?://[^\s]+', text)
         if urls:
             download_url = urls[0]
 
-        # 3. Pipe format check: /add Title | Poster | Link
         if '|' in text:
             parts = text.replace('/add', '').split('|')
             if len(parts) >= 3:
@@ -66,7 +74,6 @@ def handle_all_posts(message):
                 poster_url = parts[1].strip()
                 download_url = parts[2].strip()
         else:
-            # Extract Title from First non-empty line
             lines = [line.strip() for line in text.split('\n') if line.strip() and not line.startswith('/')]
             if lines:
                 title = lines[0].replace('❤️', '').replace('💚', '').strip()
@@ -80,10 +87,8 @@ def handle_all_posts(message):
             return
 
         if not poster_url:
-            # Default placeholder image agar photo na mile
             poster_url = f"https://via.placeholder.com/400x600/111111/FFFFFF?text={title.replace(' ', '+')}"
 
-        # Save to Firebase Firestore
         movie_data = {
             "title": title,
             "poster": poster_url,
@@ -102,5 +107,8 @@ def handle_all_posts(message):
     except Exception as e:
         bot.reply_to(message, f"❌ Error: {str(e)}")
 
-print("Bot is up and running...")
-bot.infinity_polling()
+if __name__ == "__main__":
+    # Start Web Server in background thread
+    threading.Thread(target=run_flask).start()
+    print("Bot is up and running...")
+    bot.infinity_polling()
