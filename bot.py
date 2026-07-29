@@ -28,9 +28,19 @@ db = firestore.client()
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8513466237:AAHROJjIfiRwLyKgwRHLm0XXn-1CEvGsn5Y")
 bot = telebot.TeleBot(BOT_TOKEN)
 
+def clean_url(url):
+    if not url:
+        return ""
+    url = url.strip()
+    # Remove trailing punctuation often captured by regex
+    url = re.sub(r'[\s>\]\)\}\'"]+$', '', url)
+    if not url.startswith('http://') and not url.startswith('https://'):
+        url = 'https://' + url
+    return url
+
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "👋 **Streamverse Bot Active Hai!**\n\nAap direct message reply karein, forward karein, ya `/add Title | Poster_URL | Download_URL` format me bhejein!", parse_mode="Markdown")
+    bot.reply_to(message, "👋 **Streamverse Bot Active Hai!**", parse_mode="Markdown")
 
 @bot.message_handler(content_types=['text', 'photo'])
 def handle_all_posts(message):
@@ -48,34 +58,30 @@ def handle_all_posts(message):
         download_url = ""
         poster_url = ""
 
-        # Extract URLs
+        # Raw URL regex
         urls = re.findall(r'https?://[^\s]+', text)
-        
-        # Check explicit Pipe format: Title | Poster | DownloadLink
+        if not urls:
+            urls = re.findall(r'(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:/[^\s]*)?', text)
+
+        # Handle Pipe Format: Title | Poster | Download
         if '|' in text:
             parts = text.replace('/add', '').split('|')
             if len(parts) >= 3:
                 title = parts[0].strip()
-                poster_url = parts[1].strip()
-                download_url = parts[2].strip()
+                poster_url = clean_url(parts[1])
+                download_url = clean_url(parts[2])
             elif len(parts) == 2:
                 title = parts[0].strip()
-                download_url = parts[1].strip()
+                download_url = clean_url(parts[1])
         else:
             lines = [line.strip() for line in text.split('\n') if line.strip() and not line.startswith('/')]
             if lines:
                 title = lines[0].replace('💚', '').replace('❤️', '').strip()
             if urls:
-                download_url = urls[0]
-
-        # Check if text contains direct image URL (.jpg, .png, .jpeg, postimg, etc.)
-        for url in urls:
-            if any(ext in url.lower() for ext in ['.jpg', '.jpeg', '.png', 'postimg', 'imgur', 'tmdb']):
-                poster_url = url
-                break
+                download_url = clean_url(urls[0])
 
         if not download_url and urls:
-            download_url = urls[-1]
+            download_url = clean_url(urls[-1])
 
         if not title:
             bot.reply_to(message, "⚠️ Title nahi mil saka!")
@@ -85,7 +91,6 @@ def handle_all_posts(message):
             bot.reply_to(message, "⚠️ Download Link nahi mila!")
             return
 
-        # Fallback poster image
         if not poster_url:
             clean_title = re.sub(r'[^\w\s]', '', title)
             poster_url = f"https://placehold.co/400x600/1e293b/ffffff?text={clean_title.replace(' ', '+')}"
@@ -101,7 +106,7 @@ def handle_all_posts(message):
 
         bot.reply_to(
             message, 
-            f"✅ **Website Par Live Ho Gayi!**\n\n🎬 **Title:** {title}\n🖼️ **Poster:** {poster_url}\n🔗 **Download Link:** {download_url}", 
+            f"✅ **Website Par Post Ho Gayi!**\n\n🎬 **Title:** {title}\n🔗 **Download Link:** {download_url}", 
             parse_mode="Markdown"
         )
 
