@@ -8,16 +8,12 @@ import telebot
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# Dummy Web Server for Render Port Check
+# Flask app for Render Web Service Port check
 app = Flask(__name__)
 
 @app.route('/')
-def home():
-    return "Bot is running perfectly!"
-
-def run_flask():
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+def health_check():
+    return "Streamverse Bot is Live!", 200
 
 # Firebase Setup
 firebase_key_str = os.environ.get("FIREBASE_KEY")
@@ -60,7 +56,7 @@ def handle_all_posts(message):
             poster_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_info.file_path}"
         elif message.reply_to_message and message.reply_to_message.photo:
             file_id = message.reply_to_message.photo[-1].file_id
-            file_info = bot.get_file(file_id)
+            file_info = bot.get_file(file_info.file_path if hasattr(file_info, 'file_path') else file_info)
             poster_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_info.file_path}"
 
         urls = re.findall(r'https?://[^\s]+', text)
@@ -107,8 +103,9 @@ def handle_all_posts(message):
     except Exception as e:
         bot.reply_to(message, f"❌ Error: {str(e)}")
 
-if __name__ == "__main__":
-    # Start Web Server in background thread
-    threading.Thread(target=run_flask).start()
+# Background thread for Bot polling
+def start_bot():
     print("Bot is up and running...")
     bot.infinity_polling()
+
+threading.Thread(target=start_bot, daemon=True).start()
